@@ -2,9 +2,10 @@
 
 use std::arch::x86_64::_mm256_movemask_epi8;
 use std::cmp::Ordering;
+use std::fmt;
 use std::simd::{m1x16, u16x16, IntoBits};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 struct Id {
     entries: u16x16,
     len: usize,
@@ -122,6 +123,16 @@ impl PartialOrd for Id {
 impl Ord for Id {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap()
+    }
+}
+
+impl fmt::Debug for Id {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let mut list = fmt.debug_list();
+        for i in 0..self.len {
+            list.entry(&self.entries.extract(i));
+        }
+        list.finish()
     }
 }
 
