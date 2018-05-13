@@ -1,9 +1,8 @@
 #![feature(stdsimd)]
 
-use std::arch::x86_64::_mm256_movemask_epi8;
 use std::cmp::Ordering;
 use std::fmt;
-use std::simd::{m1x16, u16x16, IntoBits};
+use std::simd::{m16x16, m1x16, u16x16};
 
 #[derive(Copy, Clone)]
 struct Id {
@@ -91,19 +90,35 @@ impl Id {
         let a = MASKS[a.len - 1].select(u16x16::splat(0), a.entries);
         let b = MASKS[b.len - 1].select(u16x16::splat(max), b.entries);
         let middle = a + ((b - a) / 2);
-        let len = unsafe {
-            let mask = _mm256_movemask_epi8(middle.gt(a).into_bits());
-            (mask.trailing_zeros() / 2) as usize + 1
-        };
         Id {
             entries: middle,
-            len,
+            len: compute_len(middle.gt(a)),
         }
     }
 
     fn entries(&self) -> u16x16 {
         MASKS[self.len - 1].select(u16x16::splat(0), self.entries)
     }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn compute_len(mask: m16x16) -> usize {
+    use std::arch::x86_64::_mm256_movemask_epi8;
+    use std::simd::IntoBits;
+    unsafe {
+        let mask = _mm256_movemask_epi8(mask.into_bits());
+        (mask.trailing_zeros() / 2) as usize + 1
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn compute_len(mask: m16x16) -> usize {
+    for i in 0..16 {
+        if mask.extract(i) {
+            return i + 1;
+        }
+    }
+    panic!("Length exceeded 16 elements")
 }
 
 impl PartialEq for Id {
