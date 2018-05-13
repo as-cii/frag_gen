@@ -1,0 +1,10 @@
+[package]
+name = "frag_gen"
+version = "0.1.0"
+authors = ["Antonio Scandurra <as-cii@github.com>"]
+
+[dev-dependencies]
+rand = "0.3"
+
+[profile.release]
+debug = true
