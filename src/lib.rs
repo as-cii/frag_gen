@@ -93,6 +93,10 @@ impl CompositeId {
         Self { entries }
     }
 
+    fn between(a: &Self, b: &Self) -> Self {
+        Self::between_with_max(a, b, u16::max_value())
+    }
+
     fn between_with_max(a: &Self, b: &Self, max: u16) -> Self {
         debug_assert!(a < b);
         let a = a.entries.iter().cloned().chain(iter::repeat(Id::new(0)));
@@ -118,6 +122,10 @@ impl Id {
             entries: u16x16::splat(value),
             len: 1,
         }
+    }
+
+    fn between(a: Self, b: Self) -> Result<Self, ()> {
+        Self::between_with_max(a, b, u16::max_value())
     }
 
     fn between_with_max(a: Self, b: Self, max: u16) -> Result<Self, ()> {
