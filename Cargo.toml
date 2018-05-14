@@ -3,6 +3,9 @@ name = "frag_gen"
 version = "0.1.0"
 authors = ["Antonio Scandurra <as-cii@github.com>"]
 
+[dependencies]
+smallvec = "0.6"
+
 [dev-dependencies]
 rand = "0.3"
 
