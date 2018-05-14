@@ -101,17 +101,6 @@ impl Id {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-fn compute_len(mask: m16x16) -> usize {
-    use std::arch::x86_64::_mm256_movemask_epi8;
-    use std::simd::IntoBits;
-    unsafe {
-        let mask = _mm256_movemask_epi8(mask.into_bits());
-        (mask.trailing_zeros() / 2) as usize + 1
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn compute_len(mask: m16x16) -> usize {
     for i in 0..16 {
         if mask.extract(i) {
