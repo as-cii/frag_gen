@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::fmt;
 use std::iter;
-use std::simd::{m16x16, m1x16, u16x16};
+use std::simd::{m16x8, m1x8, u16x8};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct CompositeId {
@@ -15,75 +15,19 @@ struct CompositeId {
 
 #[derive(Copy, Clone)]
 struct Id {
-    entries: u16x16,
+    entries: u16x8,
     len: u8,
 }
 
-static MASKS: [m1x16; 16] = [
-    m1x16::new(
-        false, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-        true,
-    ),
-    m1x16::new(
-        false, false, true, true, true, true, true, true, true, true, true, true, true, true, true,
-        true,
-    ),
-    m1x16::new(
-        false, false, false, true, true, true, true, true, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, true, true, true, true, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, true, true, true, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, true, true, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, true, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, true, true, true, true, true, true,
-        true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, true, true, true, true,
-        true, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, true, true, true,
-        true, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, true, true,
-        true, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, false, true,
-        true, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        true, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, true, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, true,
-    ),
-    m1x16::new(
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false,
-    ),
+static MASKS: [m1x8; 8] = [
+    m1x8::new(false, true, true, true, true, true, true, true),
+    m1x8::new(false, false, true, true, true, true, true, true),
+    m1x8::new(false, false, false, true, true, true, true, true),
+    m1x8::new(false, false, false, false, true, true, true, true),
+    m1x8::new(false, false, false, false, false, true, true, true),
+    m1x8::new(false, false, false, false, false, false, true, true),
+    m1x8::new(false, false, false, false, false, false, false, true),
+    m1x8::new(false, false, false, false, false, false, false, false),
 ];
 
 impl CompositeId {
@@ -119,7 +63,7 @@ impl CompositeId {
 impl Id {
     fn new(value: u16) -> Self {
         Self {
-            entries: u16x16::splat(value),
+            entries: u16x8::splat(value),
             len: 1,
         }
     }
@@ -130,8 +74,8 @@ impl Id {
 
     fn between_with_max(a: Self, b: Self, max: u16) -> Result<Self, ()> {
         debug_assert!(a < b);
-        let a = MASKS[a.len as usize - 1].select(u16x16::splat(0), a.entries);
-        let b = MASKS[b.len as usize - 1].select(u16x16::splat(max), b.entries);
+        let a = MASKS[a.len as usize - 1].select(u16x8::splat(0), a.entries);
+        let b = MASKS[b.len as usize - 1].select(u16x8::splat(max), b.entries);
         let middle = a + ((b - a) / 2);
         Ok(Id {
             entries: middle,
@@ -139,13 +83,27 @@ impl Id {
         })
     }
 
-    fn entries(&self) -> u16x16 {
-        MASKS[self.len as usize - 1].select(u16x16::splat(0), self.entries)
+    fn entries(&self) -> u16x8 {
+        MASKS[self.len as usize - 1].select(u16x8::splat(0), self.entries)
     }
 }
 
-fn compute_len(mask: m16x16) -> Result<u8, ()> {
-    for i in 0_u8..16_u8 {
+#[cfg(target_arch = "x86_64")]
+fn compute_len(mask: m16x8) -> Result<u8, ()> {
+    use std::arch::x86_64::_mm_movemask_epi8;
+    use std::simd::IntoBits;
+
+    let mask = unsafe { _mm_movemask_epi8(mask.into_bits()) };
+    if mask == 0 {
+        Err(())
+    } else {
+        Ok((mask.trailing_zeros() as u8 >> 1) + 1)
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn compute_len(mask: m16x8) -> Result<u8, ()> {
+    for i in 0_u8..8 {
         if mask.extract(i as usize) {
             return Ok(i + 1);
         }
